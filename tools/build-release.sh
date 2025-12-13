@@ -267,6 +267,9 @@ function do_build() {
 
     # Build using CMake
     local variant_build_dir="${_BUILD_DIR}/${variant_name}"
+    # Clean build directory to avoid generator conflicts
+    rm -rf -- "$variant_build_dir"
+    mkdir -p -- "$variant_build_dir"
     set -x
     cmake -S "$_SOURCE_DIR" -B "$variant_build_dir" -DCMAKE_BUILD_TYPE="$variant_build_type" "${variant_conf[@]}"
     cmake --build "$variant_build_dir" --config "$variant_build_type" --parallel "$(nproc)"
