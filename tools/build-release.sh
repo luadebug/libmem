@@ -80,12 +80,17 @@ EOF
 
 # Normalize old-style targets to new-style targets for backward compatibility
 # Old format: i686-windows-gnu-static -> New format: i686-windows-gnu-msvcrt-static
+# Old format: x86_64-windows-gnu-static-mt -> New format: x86_64-windows-gnu-msvcrt-static
 function normalize_target() {
   local target=$1
   # Convert old-style windows-gnu targets (without -msvcrt/-ucrt) to new format
   # Default to msvcrt for backward compatibility
-  if [[ "$target" =~ ^(i686|x86_64)-windows-gnu-(static|shared)$ ]]; then
-    echo "${target%-*}-msvcrt-${target##*-}"
+  # Handle both -static/-shared and -static-mt variants (remove -mt suffix)
+  if [[ "$target" =~ ^(i686|x86_64)-windows-gnu-(static|shared)(-mt)?$ ]]; then
+    # Remove -mt suffix if present, then add -msvcrt before the variant
+    local arch="${BASH_REMATCH[1]}"
+    local variant="${BASH_REMATCH[2]}"
+    echo "${arch}-windows-gnu-msvcrt-${variant}"
   else
     echo "$target"
   fi
