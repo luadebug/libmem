@@ -284,8 +284,8 @@ function do_build() {
     case "$_TARGET" in
     *-windows-msvc-shared*) copy_lib 'libmem.dll'; copy_lib 'libmem.lib' ;; # NOTE: 'libmem.lib' is used for load-time linking
     *-windows-msvc-static*) copy_lib 'libmem.lib' ;;
-    *-windows-gnu-shared*) copy_lib 'liblibmem.dll'; copy_lib 'liblibmem.dll.a' ;; # NOTE: 'liblibmem.dll.a' is the import library for load-time linking
-    *-windows-gnu-static*) copy_lib 'liblibmem.a' ;;
+    *-windows-gnu-*-shared) copy_lib 'liblibmem.dll'; copy_lib 'liblibmem.dll.a' ;; # NOTE: 'liblibmem.dll.a' is the import library for load-time linking
+    *-windows-gnu-*-static) copy_lib 'liblibmem.a' ;;
     *-shared) copy_lib 'liblibmem.so' ;;
     *-static) copy_lib 'liblibmem.a' ;;
     esac
