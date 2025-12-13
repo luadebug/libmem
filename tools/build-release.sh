@@ -22,11 +22,20 @@ declare -gr WINDOWS_PLATFORMS=(
   i686-windows-msvc
   x86_64-windows-msvc
   aarch64-windows-msvc
+  # Windows (MinGW-w64 msvcrt)
+  i686-windows-gnu-msvcrt
+  x86_64-windows-gnu-msvcrt
+  # Windows (MinGW-w64 ucrt) - UCRT only supports 64-bit
+  x86_64-windows-gnu-ucrt
 )
 declare -gr WINDOWS_VARIANTS=(
   shared-md
   static-md
   static-mt
+)
+declare -gr WINDOWS_GNU_VARIANTS=(
+  shared
+  static
 )
 
 SCRIPT_DIR=$(dirname -- "$(realpath -m -- "$0")")
@@ -43,9 +52,15 @@ function define_targets() {
     done
   done
   for platform in "${WINDOWS_PLATFORMS[@]}"; do
-    for variant in "${WINDOWS_VARIANTS[@]}"; do
-      TARGETS+=("${platform}-${variant}")
-    done
+    if [[ "$platform" == *-windows-gnu-* ]]; then
+      for variant in "${WINDOWS_GNU_VARIANTS[@]}"; do
+        TARGETS+=("${platform}-${variant}")
+      done
+    else
+      for variant in "${WINDOWS_VARIANTS[@]}"; do
+        TARGETS+=("${platform}-${variant}")
+      done
+    fi
   done
   declare -gr TARGETS
 }
@@ -65,7 +80,6 @@ EOF
 
 function main() {
   define_targets
-  echo "$TARGETS"
 
   if [[ $# -ne 1 ]]; then
     print_usage >&2
@@ -99,6 +113,7 @@ function main() {
 
   case "$target" in
   *-linux-*) _build_in_docker "$target" "$source_dir" "$out_dir" ;;
+  *-windows-gnu-*) _build_in_docker "$target" "$source_dir" "$out_dir" ;;
   *) _build_locally "$target" "$source_dir" "$out_dir" ;;
   esac
 
@@ -117,12 +132,17 @@ function _build_in_docker() {
   case "$target" in
   *-linux-gnu-*) docker_os=linux-gnu ;;
   *-linux-musl-*) docker_os=linux-musl ;;
+  *-windows-gnu-*) docker_os=linux-gnu-mingw ;;
   esac
   case "$target" in
   i686-linux-gnu-*)
     # cross-compile i686 from x86_64 (CMake is no longer compiled for i686 and we can't rely on the old distro package)
     docker_platform=linux/amd64
     docker_os+='-crossbuild-i686'
+    ;;
+  i686-windows-gnu-*)
+    # cross-compile i686 Windows from x86_64 Linux
+    docker_platform=linux/amd64
     ;;
   i686-*) docker_platform=linux/386 ;;
   x86_64-*) docker_platform=linux/amd64 ;;
@@ -183,6 +203,33 @@ function do_build() {
     *-windows-msvc-*)
       variant_conf+=(-G 'NMake Makefiles')
       ;;
+    *-windows-gnu-*)
+      local flags system_processor mingw_runtime
+      case "$_TARGET" in
+      *-msvcrt)
+        mingw_runtime='msvcrt'
+        ;;
+      *-ucrt)
+        mingw_runtime='ucrt'
+        ;;
+      esac
+      case "$_TARGET" in
+      i686-*) 
+        flags='-m32'
+        system_processor='i686'
+        variant_conf+=(-D LIBMEM_ARCH="i686")
+        ;;
+      x86_64-*) 
+        flags=''
+        system_processor='x86_64'
+        variant_conf+=(-D LIBMEM_ARCH="x86_64")
+        ;;
+      esac
+      variant_conf+=(-G 'Unix Makefiles' -DCMAKE_TOOLCHAIN_FILE="${_SOURCE_DIR}/toolchain-mingw.cmake" -DCMAKE_SYSTEM_PROCESSOR="$system_processor" -DMINGW_RUNTIME="$mingw_runtime")
+      if [[ -n "$flags" ]]; then
+        variant_conf+=(-DCMAKE_C_FLAGS="$flags" -DCMAKE_CXX_FLAGS="$flags")
+      fi
+      ;;
     *)
       local flags
       case "$_TARGET" in
@@ -203,7 +250,10 @@ function do_build() {
     { set +x; } 2>/dev/null
 
     # Copy libraries
-    local variant_out_dir="${_OUT_DIR}/lib/${variant_name}"
+    # Organize by build type (release/debug) instead of variant name
+    local build_type_lower
+    build_type_lower=$(echo "$variant_build_type" | tr '[:upper:]' '[:lower:]')
+    local variant_out_dir="${_OUT_DIR}/lib/${build_type_lower}"
     mkdir -p -- "$variant_out_dir"
     function copy_lib() {
       install -vD -m644 -- "${variant_build_dir}/${1}" "${variant_out_dir}/${2:-$(basename -- "$1")}"
@@ -211,6 +261,8 @@ function do_build() {
     case "$_TARGET" in
     *-windows-msvc-shared*) copy_lib 'libmem.dll'; copy_lib 'libmem.lib' ;; # NOTE: 'libmem.lib' is used for load-time linking
     *-windows-msvc-static*) copy_lib 'libmem.lib' ;;
+    *-windows-gnu-shared*) copy_lib 'liblibmem.dll'; copy_lib 'liblibmem.dll.a' ;; # NOTE: 'liblibmem.dll.a' is the import library for load-time linking
+    *-windows-gnu-static*) copy_lib 'liblibmem.a' ;;
     *-shared) copy_lib 'liblibmem.so' ;;
     *-static) copy_lib 'liblibmem.a' ;;
     esac
@@ -228,6 +280,22 @@ function do_build() {
   *-windows-msvc-static-mt)
     build_variant release Release -DLIBMEM_BUILD_STATIC=ON -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
     build_variant debug Debug -DLIBMEM_BUILD_STATIC=ON -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDebug
+    ;;
+  *-windows-gnu-msvcrt-shared)
+    build_variant release-shared Release -DLIBMEM_BUILD_STATIC=OFF
+    build_variant debug-shared Debug -DLIBMEM_BUILD_STATIC=OFF
+    ;;
+  *-windows-gnu-msvcrt-static)
+    build_variant release-static Release -DLIBMEM_BUILD_STATIC=ON
+    build_variant debug-static Debug -DLIBMEM_BUILD_STATIC=ON
+    ;;
+  *-windows-gnu-ucrt-shared)
+    build_variant release-shared Release -DLIBMEM_BUILD_STATIC=OFF
+    build_variant debug-shared Debug -DLIBMEM_BUILD_STATIC=OFF
+    ;;
+  *-windows-gnu-ucrt-static)
+    build_variant release-static Release -DLIBMEM_BUILD_STATIC=ON
+    build_variant debug-static Debug -DLIBMEM_BUILD_STATIC=ON
     ;;
   *-shared)
     build_variant ./ Release -DLIBMEM_BUILD_STATIC=OFF
@@ -274,6 +342,17 @@ function do_build() {
   *-windows-msvc-*)
     printf '%s\n' "${VCTOOLSVERSION:-${VSCMD_ARG_VCVARS_VER:-}}" | install -vD -m644 -- /dev/stdin "${_OUT_DIR}/MSVC_VERSION.txt"
     printf '%s\n' "${WINDOWSSDKVERSION:-}" | install -vD -m644 -- /dev/stdin "${_OUT_DIR}/WINSDK_VERSION.txt"
+    ;;
+  *-windows-gnu-*)
+    # Get MinGW-w64 version
+    # Note: UCRT only supports 64-bit, not 32-bit
+    local _mingw_prefix
+    case "$_TARGET" in
+    i686-*-msvcrt) _mingw_prefix=i686-w64-mingw32 ;;
+    x86_64-*-msvcrt) _mingw_prefix=x86_64-w64-mingw32 ;;
+    x86_64-*-ucrt) _mingw_prefix=x86_64-w64-ucrt64 ;;
+    esac
+    { "${_mingw_prefix}-gcc" --version || true; } | head -n1 | install -vD -m644 -- /dev/stdin "${_OUT_DIR}/MINGW_VERSION.txt"
     ;;
   esac
 }
