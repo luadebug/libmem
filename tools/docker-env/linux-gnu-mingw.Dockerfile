@@ -8,8 +8,10 @@ RUN apt-get update \
         ca-certificates \
         g++-mingw-w64-i686 \
         g++-mingw-w64-x86-64 \
+        g++-mingw-w64-ucrt64 \
         gcc-mingw-w64-i686 \
         gcc-mingw-w64-x86-64 \
+        gcc-mingw-w64-ucrt64 \
         python3 \
         wget \
     && rm -rf /var/lib/apt/lists/*

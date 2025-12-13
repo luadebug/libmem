@@ -22,9 +22,12 @@ declare -gr WINDOWS_PLATFORMS=(
   i686-windows-msvc
   x86_64-windows-msvc
   aarch64-windows-msvc
-  # Windows (MinGW-w64)
-  i686-windows-gnu
-  x86_64-windows-gnu
+  # Windows (MinGW-w64 msvcrt)
+  i686-windows-gnu-msvcrt
+  x86_64-windows-gnu-msvcrt
+  # Windows (MinGW-w64 ucrt)
+  i686-windows-gnu-ucrt
+  x86_64-windows-gnu-ucrt
 )
 declare -gr WINDOWS_VARIANTS=(
   shared-md
@@ -34,7 +37,6 @@ declare -gr WINDOWS_VARIANTS=(
 declare -gr WINDOWS_GNU_VARIANTS=(
   shared
   static
-  static-mt
 )
 
 SCRIPT_DIR=$(dirname -- "$(realpath -m -- "$0")")
@@ -51,7 +53,7 @@ function define_targets() {
     done
   done
   for platform in "${WINDOWS_PLATFORMS[@]}"; do
-    if [[ "$platform" == *-windows-gnu ]]; then
+    if [[ "$platform" == *-windows-gnu-* ]]; then
       for variant in "${WINDOWS_GNU_VARIANTS[@]}"; do
         TARGETS+=("${platform}-${variant}")
       done
@@ -203,7 +205,15 @@ function do_build() {
       variant_conf+=(-G 'NMake Makefiles')
       ;;
     *-windows-gnu-*)
-      local flags system_processor
+      local flags system_processor mingw_runtime
+      case "$_TARGET" in
+      *-msvcrt)
+        mingw_runtime='msvcrt'
+        ;;
+      *-ucrt)
+        mingw_runtime='ucrt'
+        ;;
+      esac
       case "$_TARGET" in
       i686-*) 
         flags='-m32'
@@ -216,7 +226,7 @@ function do_build() {
         variant_conf+=(-D LIBMEM_ARCH="x86_64")
         ;;
       esac
-      variant_conf+=(-G 'Unix Makefiles' -DCMAKE_TOOLCHAIN_FILE="${_SOURCE_DIR}/toolchain-mingw.cmake" -DCMAKE_SYSTEM_PROCESSOR="$system_processor")
+      variant_conf+=(-G 'Unix Makefiles' -DCMAKE_TOOLCHAIN_FILE="${_SOURCE_DIR}/toolchain-mingw.cmake" -DCMAKE_SYSTEM_PROCESSOR="$system_processor" -DMINGW_RUNTIME="$mingw_runtime")
       if [[ -n "$flags" ]]; then
         variant_conf+=(-DCMAKE_C_FLAGS="$flags" -DCMAKE_CXX_FLAGS="$flags")
       fi
@@ -254,7 +264,6 @@ function do_build() {
     *-windows-msvc-static*) copy_lib 'libmem.lib' ;;
     *-windows-gnu-shared*) copy_lib 'liblibmem.dll'; copy_lib 'liblibmem.dll.a' ;; # NOTE: 'liblibmem.dll.a' is the import library for load-time linking
     *-windows-gnu-static*) copy_lib 'liblibmem.a' ;;
-    *-windows-gnu-static-mt*) copy_lib 'liblibmem.a' ;;
     *-shared) copy_lib 'liblibmem.so' ;;
     *-static) copy_lib 'liblibmem.a' ;;
     esac
@@ -273,17 +282,21 @@ function do_build() {
     build_variant release Release -DLIBMEM_BUILD_STATIC=ON -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
     build_variant debug Debug -DLIBMEM_BUILD_STATIC=ON -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDebug
     ;;
-  *-windows-gnu-shared)
+  *-windows-gnu-msvcrt-shared)
     build_variant release-shared Release -DLIBMEM_BUILD_STATIC=OFF
     build_variant debug-shared Debug -DLIBMEM_BUILD_STATIC=OFF
     ;;
-  *-windows-gnu-static)
+  *-windows-gnu-msvcrt-static)
     build_variant release-static Release -DLIBMEM_BUILD_STATIC=ON
     build_variant debug-static Debug -DLIBMEM_BUILD_STATIC=ON
     ;;
-  *-windows-gnu-static-mt)
-    build_variant release-static-mt Release -DLIBMEM_BUILD_STATIC=ON
-    build_variant debug-static-mt Debug -DLIBMEM_BUILD_STATIC=ON
+  *-windows-gnu-ucrt-shared)
+    build_variant release-shared Release -DLIBMEM_BUILD_STATIC=OFF
+    build_variant debug-shared Debug -DLIBMEM_BUILD_STATIC=OFF
+    ;;
+  *-windows-gnu-ucrt-static)
+    build_variant release-static Release -DLIBMEM_BUILD_STATIC=ON
+    build_variant debug-static Debug -DLIBMEM_BUILD_STATIC=ON
     ;;
   *-shared)
     build_variant ./ Release -DLIBMEM_BUILD_STATIC=OFF
@@ -333,9 +346,12 @@ function do_build() {
     ;;
   *-windows-gnu-*)
     # Get MinGW-w64 version
+    local _mingw_prefix
     case "$_TARGET" in
-    i686-*) _mingw_prefix=i686-w64-mingw32 ;;
-    x86_64-*) _mingw_prefix=x86_64-w64-mingw32 ;;
+    i686-*-msvcrt) _mingw_prefix=i686-w64-mingw32 ;;
+    i686-*-ucrt) _mingw_prefix=i686-w64-ucrt64 ;;
+    x86_64-*-msvcrt) _mingw_prefix=x86_64-w64-mingw32 ;;
+    x86_64-*-ucrt) _mingw_prefix=x86_64-w64-ucrt64 ;;
     esac
     { "${_mingw_prefix}-gcc" --version || true; } | head -n1 | install -vD -m644 -- /dev/stdin "${_OUT_DIR}/MINGW_VERSION.txt"
     ;;
