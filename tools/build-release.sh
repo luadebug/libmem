@@ -369,12 +369,16 @@ function do_build() {
   *-windows-gnu-*)
     # Get MinGW-w64 version
     # Note: UCRT only supports 64-bit, not 32-bit
-    local _mingw_prefix
+    local _mingw_prefix=''
     case "$_TARGET" in
-    i686-*-msvcrt) _mingw_prefix=i686-w64-mingw32 ;;
-    x86_64-*-msvcrt) _mingw_prefix=x86_64-w64-mingw32 ;;
-    x86_64-*-ucrt) _mingw_prefix=x86_64-w64-ucrt64 ;;
+    i686-*-msvcrt-*) _mingw_prefix=i686-w64-mingw32 ;;
+    x86_64-*-msvcrt-*) _mingw_prefix=x86_64-w64-mingw32 ;;
+    x86_64-*-ucrt-*) _mingw_prefix=x86_64-w64-ucrt64 ;;
     esac
+    if [[ -z "$_mingw_prefix" ]]; then
+      printf 'error: Unable to determine MinGW prefix from target: %s\n' "$_TARGET" >&2
+      return 1
+    fi
     { "${_mingw_prefix}-gcc" --version || true; } | head -n1 | install -vD -m644 -- /dev/stdin "${_OUT_DIR}/MINGW_VERSION.txt"
     ;;
   esac
