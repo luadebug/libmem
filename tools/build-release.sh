@@ -266,8 +266,10 @@ function do_build() {
     variant_conf+=(-DLIBMEM_BUILD_TESTS='OFF')
 
     # Build using CMake
-    local variant_build_dir="${_BUILD_DIR}/${variant_name}"
-    # Clean build directory to avoid generator conflicts
+    # Use target name in build directory to ensure uniqueness and avoid generator conflicts
+    local variant_build_dir="${_BUILD_DIR}/${_TARGET}-${variant_name}"
+    # Clean build directory completely to avoid generator conflicts
+    # This ensures no leftover CMakeCache.txt from previous builds with different generators
     rm -rf -- "$variant_build_dir"
     mkdir -p -- "$variant_build_dir"
     set -x
