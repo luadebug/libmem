@@ -290,9 +290,7 @@ function do_build() {
     fi
     mkdir -p -- "$variant_build_dir"
     set -x
-    # Use --fresh flag to tell CMake to ignore any cache and start fresh
-    # The -G flag is already in variant_conf array and will be used
-    cmake -S "$_SOURCE_DIR" -B "$variant_build_dir" --fresh -DCMAKE_BUILD_TYPE="$variant_build_type" "${variant_conf[@]}"
+    cmake -S "$_SOURCE_DIR" -B "$variant_build_dir" -DCMAKE_BUILD_TYPE="$variant_build_type" "${variant_conf[@]}"
     cmake --build "$variant_build_dir" --config "$variant_build_type" --parallel "$(nproc)"
     { set +x; } 2>/dev/null
 
