@@ -12,6 +12,7 @@ RUN apt-get update \
         gcc-mingw-w64-i686 \
         gcc-mingw-w64-x86-64 \
         gcc-mingw-w64-ucrt64 \
+        ninja-build \
         python3 \
         wget \
     && rm -rf /var/lib/apt/lists/*
