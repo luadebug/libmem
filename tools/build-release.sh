@@ -265,13 +265,29 @@ function do_build() {
     esac
     variant_conf+=(-DLIBMEM_BUILD_TESTS='OFF')
 
+    # Extract generator from variant_conf to include in directory name
+    local generator="default"
+    local i
+    for ((i=0; i<${#variant_conf[@]}; i++)); do
+      if [[ "${variant_conf[i]}" == "-G" ]] && [[ -n "${variant_conf[i+1]:-}" ]]; then
+        generator="${variant_conf[i+1]// /_}"  # Replace spaces with underscores
+        break
+      fi
+    done
+
     # Build using CMake
-    # Use target name in build directory to ensure uniqueness and avoid generator conflicts
-    local variant_build_dir="${_BUILD_DIR}/${_TARGET}-${variant_name}"
+    # Use target name and generator in build directory to ensure uniqueness and avoid generator conflicts
+    local variant_build_dir="${_BUILD_DIR}/${_TARGET}-${variant_name}-${generator}"
     # Clean build directory completely to avoid generator conflicts
     # This ensures no leftover CMakeCache.txt from previous builds with different generators
+    printf '[+] Cleaning build directory: %s\n' "$variant_build_dir"
     rm -rf -- "$variant_build_dir"
     mkdir -p -- "$variant_build_dir"
+    # Verify the directory is clean (no CMakeCache.txt should exist)
+    if [[ -f "$variant_build_dir/CMakeCache.txt" ]]; then
+      printf 'error: CMakeCache.txt still exists after cleanup!\n' >&2
+      rm -f -- "$variant_build_dir/CMakeCache.txt"
+    fi
     set -x
     cmake -S "$_SOURCE_DIR" -B "$variant_build_dir" -DCMAKE_BUILD_TYPE="$variant_build_type" "${variant_conf[@]}"
     cmake --build "$variant_build_dir" --config "$variant_build_type" --parallel "$(nproc)"
