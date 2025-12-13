@@ -277,37 +277,22 @@ function do_build() {
 
     # Build using CMake
     # Use target name, generator, and a random suffix in build directory to ensure complete uniqueness
-    # This prevents any possibility of CMakeCache.txt conflicts from previous builds
+    # This ensures each build gets a completely fresh directory that CMake has never seen
     local random_suffix
-    random_suffix=$(openssl rand -hex 4 2>/dev/null || echo "$$$(date +%s)")
+    random_suffix=$(openssl rand -hex 8 2>/dev/null || echo "$$$(date +%s%N)")
     local variant_build_dir="${_BUILD_DIR}/${_TARGET}-${variant_name}-${generator}-${random_suffix}"
-    # Clean build directory completely to avoid generator conflicts
     printf '[+] Using build directory: %s\n' "$variant_build_dir"
-    # Remove directory if it exists
+    # Create the directory - it should not exist, but if it does, use a different name
     if [[ -d "$variant_build_dir" ]]; then
-      # Remove any CMake cache files first
-      rm -f -- "$variant_build_dir"/CMakeCache.txt 2>/dev/null || true
-      rm -rf -- "$variant_build_dir"/CMakeFiles 2>/dev/null || true
-      # Then remove the entire directory
-      rm -rf -- "$variant_build_dir"
+      # If directory exists, append another random suffix
+      random_suffix="${random_suffix}-$(openssl rand -hex 4 2>/dev/null || echo "$$")"
+      variant_build_dir="${_BUILD_DIR}/${_TARGET}-${variant_name}-${generator}-${random_suffix}"
     fi
-    # Create fresh directory
     mkdir -p -- "$variant_build_dir"
-    # Verify it's truly empty (should have no files)
-    local dir_contents
-    dir_contents=$(ls -A "$variant_build_dir" 2>/dev/null || true)
-    if [[ -n "$dir_contents" ]]; then
-      printf 'error: Build directory not empty after cleanup: %s\n' "$dir_contents" >&2
-      rm -rf -- "$variant_build_dir"/*
-    fi
     set -x
-    # Use --fresh flag (available in CMake 3.24+) to completely ignore any existing cache
-    # This is the "normal way" - let CMake handle cache management
-    cmake -S "$_SOURCE_DIR" -B "$variant_build_dir" --fresh -DCMAKE_BUILD_TYPE="$variant_build_type" "${variant_conf[@]}" 2>&1 || {
-      # If --fresh fails (older CMake), fall back to regular cmake
-      # The unique directory name should prevent conflicts
-      cmake -S "$_SOURCE_DIR" -B "$variant_build_dir" -DCMAKE_BUILD_TYPE="$variant_build_type" "${variant_conf[@]}"
-    }
+    # Use --fresh flag to tell CMake to ignore any cache and start fresh
+    # The -G flag is already in variant_conf array and will be used
+    cmake -S "$_SOURCE_DIR" -B "$variant_build_dir" --fresh -DCMAKE_BUILD_TYPE="$variant_build_type" "${variant_conf[@]}"
     cmake --build "$variant_build_dir" --config "$variant_build_type" --parallel "$(nproc)"
     { set +x; } 2>/dev/null
 
