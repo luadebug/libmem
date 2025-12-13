@@ -248,7 +248,7 @@ function do_build() {
         variant_conf+=(-D LIBMEM_ARCH="x86_64")
         ;;
       esac
-      variant_conf+=(-G 'Unix Makefiles' -DCMAKE_TOOLCHAIN_FILE="${_SOURCE_DIR}/toolchain-mingw.cmake" -DCMAKE_SYSTEM_PROCESSOR="$system_processor" -DMINGW_RUNTIME="$mingw_runtime")
+      variant_conf+=(-G 'Ninja' -DCMAKE_TOOLCHAIN_FILE="${_SOURCE_DIR}/toolchain-mingw.cmake" -DCMAKE_SYSTEM_PROCESSOR="$system_processor" -DMINGW_RUNTIME="$mingw_runtime")
       if [[ -n "$flags" ]]; then
         variant_conf+=(-DCMAKE_C_FLAGS="$flags" -DCMAKE_CXX_FLAGS="$flags")
       fi
