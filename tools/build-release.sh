@@ -276,20 +276,26 @@ function do_build() {
     done
 
     # Build using CMake
-    # Use target name and generator in build directory to ensure uniqueness and avoid generator conflicts
-    local variant_build_dir="${_BUILD_DIR}/${_TARGET}-${variant_name}-${generator}"
+    # Use target name, generator, and a random suffix in build directory to ensure complete uniqueness
+    # This prevents any possibility of CMakeCache.txt conflicts from previous builds
+    local random_suffix
+    random_suffix=$(openssl rand -hex 4 2>/dev/null || echo "$$$(date +%s)")
+    local variant_build_dir="${_BUILD_DIR}/${_TARGET}-${variant_name}-${generator}-${random_suffix}"
     # Clean build directory completely to avoid generator conflicts
-    # This ensures no leftover CMakeCache.txt from previous builds with different generators
-    printf '[+] Cleaning build directory: %s\n' "$variant_build_dir"
+    printf '[+] Using build directory: %s\n' "$variant_build_dir"
     rm -rf -- "$variant_build_dir"
     mkdir -p -- "$variant_build_dir"
-    # Verify the directory is clean (no CMakeCache.txt should exist)
-    if [[ -f "$variant_build_dir/CMakeCache.txt" ]]; then
-      printf 'error: CMakeCache.txt still exists after cleanup!\n' >&2
-      rm -f -- "$variant_build_dir/CMakeCache.txt"
-    fi
+    # Explicitly ensure no CMakeCache.txt exists before running cmake
+    rm -f -- "$variant_build_dir"/CMakeCache.txt "$variant_build_dir"/CMakeFiles/CMakeCache.txt 2>/dev/null || true
     set -x
-    cmake -S "$_SOURCE_DIR" -B "$variant_build_dir" -DCMAKE_BUILD_TYPE="$variant_build_type" "${variant_conf[@]}"
+    # Use --fresh flag if available (CMake 3.24+) to ensure clean cache
+    # This flag forces CMake to ignore any existing cache and start fresh
+    if cmake --help 2>&1 | grep -qE '\-\-fresh|fresh'; then
+      cmake -S "$_SOURCE_DIR" -B "$variant_build_dir" --fresh -DCMAKE_BUILD_TYPE="$variant_build_type" "${variant_conf[@]}"
+    else
+      # For older CMake versions, ensure the directory is completely clean
+      cmake -S "$_SOURCE_DIR" -B "$variant_build_dir" -DCMAKE_BUILD_TYPE="$variant_build_type" "${variant_conf[@]}"
+    fi
     cmake --build "$variant_build_dir" --config "$variant_build_type" --parallel "$(nproc)"
     { set +x; } 2>/dev/null
 
