@@ -248,7 +248,7 @@ function do_build() {
         variant_conf+=(-D LIBMEM_ARCH="x86_64")
         ;;
       esac
-      variant_conf+=(-G 'Ninja' -DCMAKE_TOOLCHAIN_FILE="${_SOURCE_DIR}/toolchain-mingw.cmake" -DCMAKE_SYSTEM_PROCESSOR="$system_processor" -DMINGW_RUNTIME="$mingw_runtime")
+      variant_conf+=(-DCMAKE_TOOLCHAIN_FILE="${_SOURCE_DIR}/toolchain-mingw.cmake" -DCMAKE_SYSTEM_PROCESSOR="$system_processor" -DMINGW_RUNTIME="$mingw_runtime" -DCMAKE_GENERATOR=Ninja)
       if [[ -n "$flags" ]]; then
         variant_conf+=(-DCMAKE_C_FLAGS="$flags" -DCMAKE_CXX_FLAGS="$flags")
       fi
@@ -265,29 +265,10 @@ function do_build() {
     esac
     variant_conf+=(-DLIBMEM_BUILD_TESTS='OFF')
 
-    # Extract generator from variant_conf to include in directory name
-    local generator="default"
-    local i
-    for ((i=0; i<${#variant_conf[@]}; i++)); do
-      if [[ "${variant_conf[i]}" == "-G" ]] && [[ -n "${variant_conf[i+1]:-}" ]]; then
-        generator="${variant_conf[i+1]// /_}"  # Replace spaces with underscores
-        break
-      fi
-    done
-
     # Build using CMake
-    # Use target name, generator, and a random suffix in build directory to ensure complete uniqueness
-    # This ensures each build gets a completely fresh directory that CMake has never seen
-    local random_suffix
-    random_suffix=$(openssl rand -hex 8 2>/dev/null || echo "$$$(date +%s%N)")
-    local variant_build_dir="${_BUILD_DIR}/${_TARGET}-${variant_name}-${generator}-${random_suffix}"
+    # Use a simple, consistent build directory name - CMakeLists.txt will handle the generator
+    local variant_build_dir="${_BUILD_DIR}/${variant_name}"
     printf '[+] Using build directory: %s\n' "$variant_build_dir"
-    # Create the directory - it should not exist, but if it does, use a different name
-    if [[ -d "$variant_build_dir" ]]; then
-      # If directory exists, append another random suffix
-      random_suffix="${random_suffix}-$(openssl rand -hex 4 2>/dev/null || echo "$$")"
-      variant_build_dir="${_BUILD_DIR}/${_TARGET}-${variant_name}-${generator}-${random_suffix}"
-    fi
     mkdir -p -- "$variant_build_dir"
     set -x
     cmake -S "$_SOURCE_DIR" -B "$variant_build_dir" -DCMAKE_BUILD_TYPE="$variant_build_type" "${variant_conf[@]}"
