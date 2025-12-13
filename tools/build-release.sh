@@ -225,10 +225,10 @@ function do_build() {
     *-windows-gnu-*)
       local flags system_processor mingw_runtime=''
       case "$_TARGET" in
-      *-msvcrt)
+      *-msvcrt-*)
         mingw_runtime='msvcrt'
         ;;
-      *-ucrt)
+      *-ucrt-*)
         mingw_runtime='ucrt'
         ;;
       esac
