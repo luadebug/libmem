@@ -223,7 +223,7 @@ function do_build() {
       variant_conf+=(-G 'NMake Makefiles')
       ;;
     *-windows-gnu-*)
-      local flags system_processor mingw_runtime
+      local flags system_processor mingw_runtime=''
       case "$_TARGET" in
       *-msvcrt)
         mingw_runtime='msvcrt'
@@ -232,6 +232,10 @@ function do_build() {
         mingw_runtime='ucrt'
         ;;
       esac
+      if [[ -z "$mingw_runtime" ]]; then
+        printf 'error: Unable to determine MinGW runtime from target: %s\n' "$_TARGET" >&2
+        return 1
+      fi
       case "$_TARGET" in
       i686-*) 
         flags='-m32'
