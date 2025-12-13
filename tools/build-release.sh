@@ -25,8 +25,7 @@ declare -gr WINDOWS_PLATFORMS=(
   # Windows (MinGW-w64 msvcrt)
   i686-windows-gnu-msvcrt
   x86_64-windows-gnu-msvcrt
-  # Windows (MinGW-w64 ucrt)
-  i686-windows-gnu-ucrt
+  # Windows (MinGW-w64 ucrt) - UCRT only supports 64-bit
   x86_64-windows-gnu-ucrt
 )
 declare -gr WINDOWS_VARIANTS=(
@@ -346,10 +345,10 @@ function do_build() {
     ;;
   *-windows-gnu-*)
     # Get MinGW-w64 version
+    # Note: UCRT only supports 64-bit, not 32-bit
     local _mingw_prefix
     case "$_TARGET" in
     i686-*-msvcrt) _mingw_prefix=i686-w64-mingw32 ;;
-    i686-*-ucrt) _mingw_prefix=i686-w64-ucrt64 ;;
     x86_64-*-msvcrt) _mingw_prefix=x86_64-w64-mingw32 ;;
     x86_64-*-ucrt) _mingw_prefix=x86_64-w64-ucrt64 ;;
     esac
