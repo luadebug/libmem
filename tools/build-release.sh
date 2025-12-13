@@ -78,6 +78,19 @@ $(printf '  - %s\n' "${TARGETS[@]}")
 EOF
 }
 
+# Normalize old-style targets to new-style targets for backward compatibility
+# Old format: i686-windows-gnu-static -> New format: i686-windows-gnu-msvcrt-static
+function normalize_target() {
+  local target=$1
+  # Convert old-style windows-gnu targets (without -msvcrt/-ucrt) to new format
+  # Default to msvcrt for backward compatibility
+  if [[ "$target" =~ ^(i686|x86_64)-windows-gnu-(static|shared)$ ]]; then
+    echo "${target%-*}-msvcrt-${target##*-}"
+  else
+    echo "$target"
+  fi
+}
+
 function main() {
   define_targets
 
@@ -86,7 +99,8 @@ function main() {
     return 1
   fi
 
-  local target=$1
+  local target
+  target=$(normalize_target "$1")
   if ! array_contains "$target" "${TARGETS[@]}"; then
     printf 'error: Unknown target: %s\n' "$target" >&2
     return 1
