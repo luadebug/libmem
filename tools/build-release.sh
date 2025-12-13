@@ -283,17 +283,38 @@ function do_build() {
     local variant_build_dir="${_BUILD_DIR}/${_TARGET}-${variant_name}-${generator}-${random_suffix}"
     # Clean build directory completely to avoid generator conflicts
     printf '[+] Using build directory: %s\n' "$variant_build_dir"
-    rm -rf -- "$variant_build_dir"
+    # Remove directory if it exists
+    if [[ -d "$variant_build_dir" ]]; then
+      # Remove any CMake cache files first
+      rm -f -- "$variant_build_dir"/CMakeCache.txt 2>/dev/null || true
+      rm -rf -- "$variant_build_dir"/CMakeFiles 2>/dev/null || true
+      # Then remove the entire directory
+      rm -rf -- "$variant_build_dir"
+    fi
+    # Create fresh directory
     mkdir -p -- "$variant_build_dir"
-    # Explicitly ensure no CMakeCache.txt exists before running cmake
-    rm -f -- "$variant_build_dir"/CMakeCache.txt "$variant_build_dir"/CMakeFiles/CMakeCache.txt 2>/dev/null || true
+    # Verify it's truly empty (should have no files)
+    local dir_contents
+    dir_contents=$(ls -A "$variant_build_dir" 2>/dev/null || true)
+    if [[ -n "$dir_contents" ]]; then
+      printf 'error: Build directory not empty after cleanup: %s\n' "$dir_contents" >&2
+      rm -rf -- "$variant_build_dir"/*
+    fi
+    # Check for --fresh flag support (do this before set -x to avoid noise)
+    local cmake_supports_fresh=false
+    if command -v cmake >/dev/null 2>&1; then
+      if cmake --help 2>&1 | grep -qE '\-\-fresh'; then
+        cmake_supports_fresh=true
+      fi
+    fi
     set -x
-    # Use --fresh flag if available (CMake 3.24+) to ensure clean cache
-    # This flag forces CMake to ignore any existing cache and start fresh
-    if cmake --help 2>&1 | grep -qE '\-\-fresh|fresh'; then
+    # Always use --fresh flag if available (CMake 3.24+) to force clean cache
+    # This completely ignores any existing cache files
+    if [[ "$cmake_supports_fresh" == "true" ]]; then
       cmake -S "$_SOURCE_DIR" -B "$variant_build_dir" --fresh -DCMAKE_BUILD_TYPE="$variant_build_type" "${variant_conf[@]}"
     else
-      # For older CMake versions, ensure the directory is completely clean
+      # For older CMake, explicitly remove any cache that might exist
+      rm -f -- "$variant_build_dir"/CMakeCache.txt
       cmake -S "$_SOURCE_DIR" -B "$variant_build_dir" -DCMAKE_BUILD_TYPE="$variant_build_type" "${variant_conf[@]}"
     fi
     cmake --build "$variant_build_dir" --config "$variant_build_type" --parallel "$(nproc)"
