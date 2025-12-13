@@ -300,23 +300,14 @@ function do_build() {
       printf 'error: Build directory not empty after cleanup: %s\n' "$dir_contents" >&2
       rm -rf -- "$variant_build_dir"/*
     fi
-    # Check for --fresh flag support (do this before set -x to avoid noise)
-    local cmake_supports_fresh=false
-    if command -v cmake >/dev/null 2>&1; then
-      if cmake --help 2>&1 | grep -qE '\-\-fresh'; then
-        cmake_supports_fresh=true
-      fi
-    fi
     set -x
-    # Always use --fresh flag if available (CMake 3.24+) to force clean cache
-    # This completely ignores any existing cache files
-    if [[ "$cmake_supports_fresh" == "true" ]]; then
-      cmake -S "$_SOURCE_DIR" -B "$variant_build_dir" --fresh -DCMAKE_BUILD_TYPE="$variant_build_type" "${variant_conf[@]}"
-    else
-      # For older CMake, explicitly remove any cache that might exist
-      rm -f -- "$variant_build_dir"/CMakeCache.txt
+    # Use --fresh flag (available in CMake 3.24+) to completely ignore any existing cache
+    # This is the "normal way" - let CMake handle cache management
+    cmake -S "$_SOURCE_DIR" -B "$variant_build_dir" --fresh -DCMAKE_BUILD_TYPE="$variant_build_type" "${variant_conf[@]}" 2>&1 || {
+      # If --fresh fails (older CMake), fall back to regular cmake
+      # The unique directory name should prevent conflicts
       cmake -S "$_SOURCE_DIR" -B "$variant_build_dir" -DCMAKE_BUILD_TYPE="$variant_build_type" "${variant_conf[@]}"
-    fi
+    }
     cmake --build "$variant_build_dir" --config "$variant_build_type" --parallel "$(nproc)"
     { set +x; } 2>/dev/null
 
